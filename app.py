@@ -495,25 +495,40 @@ def run_simulation_for_params(profit_target, loss_threshold, num_sessions=1000):
 def run_optimization(profit_targets, loss_thresholds, num_sessions=1000):
     """
     Run simulations for each combination of profit target and loss threshold.
-    Returns a DataFrame summarizing:
-      - Probability of hitting the profit target,
-      - Probability of hitting the loss threshold,
-      - Average hands played,
-      - Overall expected profit.
+    
+    Returns a DataFrame summarizing, for each parameter combination:
+      - prob_profit_target: Fraction of sessions stopping because the profit target was reached.
+      - prob_loss_threshold: Fraction of sessions stopping because the loss threshold was reached.
+      - prob_win_non_target: Fraction of sessions that ended at max hands with a win (< profit_target).
+      - prob_loss_non_threshold: Fraction of sessions that ended at max hands with a loss (but not hitting loss threshold).
+      - avg_hands: Average number of hands played.
+      - exp_profit: Overall expected profit.
     """
     optimization_results = []
     for pt in profit_targets:
         for lt in loss_thresholds:
             df = run_simulation_for_params(pt, lt, num_sessions)
-            prob_profit = (df['stop_reason'] == 'profit_target').mean()
-            prob_loss = (df['stop_reason'] == 'loss_threshold').mean()
+            # Outcome categories:
+            prob_profit_target = (df['stop_reason'] == 'profit_target').mean()
+            prob_loss_threshold = (df['stop_reason'] == 'loss_threshold').mean()
+            # For sessions ending by max hands, further classify by profit sign:
+            max_sessions = df[df['stop_reason'] == 'max_hands']
+            if len(max_sessions) > 0:
+                prob_win_non_target = (max_sessions['profit'] > 0).mean()
+                prob_loss_non_threshold = (max_sessions['profit'] < 0).mean()
+            else:
+                prob_win_non_target = 0.0
+                prob_loss_non_threshold = 0.0
+
             avg_hands = df['hands_played'].mean()
             exp_profit = df['profit'].mean()
             optimization_results.append({
                 'profit_target': pt,
                 'loss_threshold': lt,
-                'prob_profit': prob_profit,
-                'prob_loss': prob_loss,
+                'prob_profit_target': prob_profit_target,
+                'prob_loss_threshold': prob_loss_threshold,
+                'prob_win_non_target': prob_win_non_target,
+                'prob_loss_non_threshold': prob_loss_non_threshold,
                 'avg_hands': avg_hands,
                 'exp_profit': exp_profit
             })
@@ -548,21 +563,63 @@ def main():
         st.write("### Optimization Results")
         st.dataframe(optimization_results)
 
-        # Create a pivot table for probability of reaching profit target.
-        pivot = optimization_results.pivot(index='loss_threshold', columns='profit_target', values='prob_profit')
-        st.write("### Heatmap: Probability of Reaching Profit Target")
-        st.dataframe(pivot)
+        # Create pivot tables for each outcome category.
+        pivot_profit_target = optimization_results.pivot(index='loss_threshold', columns='profit_target', values='prob_profit_target')
+        pivot_win_non_target = optimization_results.pivot(index='loss_threshold', columns='profit_target', values='prob_win_non_target')
+        pivot_loss_non_threshold = optimization_results.pivot(index='loss_threshold', columns='profit_target', values='prob_loss_non_threshold')
+        pivot_loss_threshold = optimization_results.pivot(index='loss_threshold', columns='profit_target', values='prob_loss_threshold')
 
-        fig, ax = plt.subplots()
-        cax = ax.imshow(pivot.values, cmap='viridis', origin='lower', aspect='auto')
-        ax.set_xticks(np.arange(len(pivot.columns)))
-        ax.set_xticklabels(pivot.columns)
-        ax.set_yticks(np.arange(len(pivot.index)))
-        ax.set_yticklabels(pivot.index)
-        ax.set_xlabel("Profit Target (units)")
-        ax.set_ylabel("Loss Threshold (units)")
-        fig.colorbar(cax)
-        st.pyplot(fig)
+        st.write("### Heatmap: Probability of Reaching Profit Target")
+        st.dataframe(pivot_profit_target)
+        fig1, ax1 = plt.subplots()
+        cax1 = ax1.imshow(pivot_profit_target.values, cmap='viridis', origin='lower', aspect='auto')
+        ax1.set_xticks(np.arange(len(pivot_profit_target.columns)))
+        ax1.set_xticklabels(pivot_profit_target.columns)
+        ax1.set_yticks(np.arange(len(pivot_profit_target.index)))
+        ax1.set_yticklabels(pivot_profit_target.index)
+        ax1.set_xlabel("Profit Target (units)")
+        ax1.set_ylabel("Loss Threshold (units)")
+        fig1.colorbar(cax1)
+        st.pyplot(fig1)
+
+        st.write("### Heatmap: Probability of Wins (Max Hands, No Profit Target)")
+        st.dataframe(pivot_win_non_target)
+        fig2, ax2 = plt.subplots()
+        cax2 = ax2.imshow(pivot_win_non_target.values, cmap='viridis', origin='lower', aspect='auto')
+        ax2.set_xticks(np.arange(len(pivot_win_non_target.columns)))
+        ax2.set_xticklabels(pivot_win_non_target.columns)
+        ax2.set_yticks(np.arange(len(pivot_win_non_target.index)))
+        ax2.set_yticklabels(pivot_win_non_target.index)
+        ax2.set_xlabel("Profit Target (units)")
+        ax2.set_ylabel("Loss Threshold (units)")
+        fig2.colorbar(cax2)
+        st.pyplot(fig2)
+
+        st.write("### Heatmap: Probability of Losses (Max Hands, No Loss Threshold)")
+        st.dataframe(pivot_loss_non_threshold)
+        fig3, ax3 = plt.subplots()
+        cax3 = ax3.imshow(pivot_loss_non_threshold.values, cmap='viridis', origin='lower', aspect='auto')
+        ax3.set_xticks(np.arange(len(pivot_loss_non_threshold.columns)))
+        ax3.set_xticklabels(pivot_loss_non_threshold.columns)
+        ax3.set_yticks(np.arange(len(pivot_loss_non_threshold.index)))
+        ax3.set_yticklabels(pivot_loss_non_threshold.index)
+        ax3.set_xlabel("Profit Target (units)")
+        ax3.set_ylabel("Loss Threshold (units)")
+        fig3.colorbar(cax3)
+        st.pyplot(fig3)
+
+        st.write("### Heatmap: Probability of Reaching Loss Threshold")
+        st.dataframe(pivot_loss_threshold)
+        fig4, ax4 = plt.subplots()
+        cax4 = ax4.imshow(pivot_loss_threshold.values, cmap='viridis', origin='lower', aspect='auto')
+        ax4.set_xticks(np.arange(len(pivot_loss_threshold.columns)))
+        ax4.set_xticklabels(pivot_loss_threshold.columns)
+        ax4.set_yticks(np.arange(len(pivot_loss_threshold.index)))
+        ax4.set_yticklabels(pivot_loss_threshold.index)
+        ax4.set_xlabel("Profit Target (units)")
+        ax4.set_ylabel("Loss Threshold (units)")
+        fig4.colorbar(cax4)
+        st.pyplot(fig4)
 
 if __name__ == '__main__':
     main()
