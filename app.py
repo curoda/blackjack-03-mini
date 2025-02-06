@@ -64,10 +64,13 @@ def calculate_hand_value(hand):
 
 def is_soft(hand):
     """
-    Return True if the hand is "soft" (contains an Ace counted as 11).
+    Return True if the hand is "soft" (i.e., contains an Ace counted as 11).
+    A hand is soft if the raw total (assuming every Ace is 11) is equal to the best total
+    computed by calculate_hand_value (meaning no Ace was reduced).
     """
-    # A hand is soft if it contains an Ace and not all Aces have been reduced to 1.
-    return ('A' in hand) and (calculate_hand_value(hand) != sum(CARD_VALUES[card] for card in hand))
+    raw_total = sum(CARD_VALUES[card] for card in hand)
+    best_total = calculate_hand_value(hand)
+    return ('A' in hand) and (raw_total == best_total)
 
 def is_pair(hand):
     """
